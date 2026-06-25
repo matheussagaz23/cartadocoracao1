@@ -2,17 +2,15 @@
   publish = "."
   functions = "netlify/functions"
 
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "POST, OPTIONS, GET"
+    Access-Control-Allow-Headers = "Content-Type"
+
 [[redirects]]
   from = "/api/pix"
   to = "/.netlify/functions/pix"
   status = 200
-
-[[redirects]]
-  from = "/netlify/functions/pix.js"
-  to = "/.netlify/functions/pix"
-  status = 200
-
-[[headers]]
-  for = "/netlify/*"
-  [headers.values]
-    X-Robots-Tag = "noindex"
+  force = true
