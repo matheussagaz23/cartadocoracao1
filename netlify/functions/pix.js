@@ -1,12 +1,14 @@
 exports.handler = async function (event, context) {
+  const origin = event.headers.origin || event.headers.Origin || '*';
   const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'Content-Type, Accept',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+    'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
   };
 
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Método não permitido' }) };
 
   let body;
@@ -17,7 +19,6 @@ exports.handler = async function (event, context) {
   const API_KEY = process.env.ABACATEPAY_API_KEY;
 
   try {
-    // Criar cliente com CPF
     const clienteRes = await fetch('https://api.abacatepay.com/v1/customer/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
@@ -32,7 +33,6 @@ exports.handler = async function (event, context) {
     if (!clienteRes.ok) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Erro ao criar cliente', detail: cliente }) };
 
     const methods = metodo === 'CREDIT_CARD' ? ['CREDIT_CARD'] : ['PIX'];
-
     const billingBody = {
       frequency: 'ONE_TIME',
       methods,
