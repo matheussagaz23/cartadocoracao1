@@ -1741,11 +1741,18 @@
       <div class="pag-section-sub">Pagamento instantâneo. Liberação em segundos.</div>
 
       <label class="campo-label">Nome completo <span style="color:var(--pink)">*</span></label>
-      <div class="campo-wrap" style="margin-bottom:1.25rem">
+      <div class="campo-wrap">
         <span class="campo-icon">👤</span>
         <input class="campo-input" id="pagNome" type="text" placeholder="Seu nome completo" />
       </div>
       <p class="msg-erro" id="erroPagNome" style="display:none;margin-bottom:8px">⚠️ Por favor, insira seu nome completo.</p>
+
+      <label class="campo-label" style="margin-top:1rem">CPF <span style="color:var(--pink)">*</span></label>
+      <div class="campo-wrap" style="margin-bottom:1.25rem">
+        <span class="campo-icon">🪪</span>
+        <input class="campo-input" id="pagCpf" type="text" placeholder="000.000.000-00" maxlength="14" oninput="formatarCpf(this)" />
+      </div>
+      <p class="msg-erro" id="erroPagCpf" style="display:none;margin-bottom:8px">⚠️ Por favor, insira um CPF válido.</p>
 
       <!-- PIX gerado -->
       <div class="pix-result-box" id="pixResultBox">
@@ -2301,6 +2308,14 @@
     document.getElementById('formCard').style.display = m === 'card' ? 'block' : 'none';
   }
 
+  function formatarCpf(el) {
+    var v = el.value.replace(/\D/g,'').substring(0,11);
+    v = v.replace(/(\d{3})(\d)/,'$1.$2');
+    v = v.replace(/(\d{3})(\d)/,'$1.$2');
+    v = v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+    el.value = v;
+  }
+
   function formatarCartao(el) {
     var v = el.value.replace(/\D/g,'').substring(0,16);
     el.value = v.replace(/(.{4})/g,'$1 ').trim();
@@ -2313,14 +2328,30 @@
 
   async function processarPix() {
     var nome = document.getElementById('pagNome').value.trim();
+    var cpf  = document.getElementById('pagCpf') ? document.getElementById('pagCpf').value.replace(/\D/g,'') : '';
     var errNome = document.getElementById('erroPagNome');
+    var errCpf  = document.getElementById('erroPagCpf');
+    var ok = true;
+
     if (!nome) {
       document.getElementById('pagNome').style.borderColor = '#ef4444';
       if (errNome) errNome.style.display = 'block';
-      return;
+      ok = false;
+    } else {
+      document.getElementById('pagNome').style.borderColor = '';
+      if (errNome) errNome.style.display = 'none';
     }
-    document.getElementById('pagNome').style.borderColor = '';
-    if (errNome) errNome.style.display = 'none';
+
+    if (!cpf || cpf.length < 11) {
+      document.getElementById('pagCpf').style.borderColor = '#ef4444';
+      if (errCpf) errCpf.style.display = 'block';
+      ok = false;
+    } else {
+      document.getElementById('pagCpf').style.borderColor = '';
+      if (errCpf) errCpf.style.display = 'none';
+    }
+
+    if (!ok) return;
 
     var btn = document.getElementById('btnPagarPix');
     btn.disabled = true;
@@ -2330,24 +2361,42 @@
     var tel   = document.getElementById('pixTelefone') ? document.getElementById('pixTelefone').value.replace(/\D/g,'') : '';
 
     var debug = document.getElementById('debugBox');
+    var API_KEY = 'abc_dev_crFztJxEAJcdrSL4M0P5ba5J';
     try {
-      var resp = await fetch('/.netlify/functions/pix', {
+      // 1. Criar cliente
+      var clienteResp = await fetch('https://api.abacatepay.com/v1/customer/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, telefone: tel || '11999999999', nome: nome })
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_KEY },
+        body: JSON.stringify({ name: nome, email: email, cellphone: tel || '11999999999' })
       });
-      var rawText = await resp.text();
-      if (debug) { debug.style.display='block'; debug.textContent = 'Status: ' + resp.status + ' | Resposta: ' + rawText.substring(0,300); }
-      var data;
-      try { data = JSON.parse(rawText); } catch(e) { data = {}; }
+      var cliente = await clienteResp.json();
+      if (debug) { debug.style.display='block'; debug.textContent = 'Cliente: ' + JSON.stringify(cliente).substring(0,200); }
 
-      if (data.success && data.pixCopiaECola) {
-        document.getElementById('pixQrCode').src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(data.pixCopiaECola);
-        document.getElementById('pixCopiaCola').textContent = data.pixCopiaECola;
+      // 2. Gerar cobrança PIX
+      var cobResp = await fetch('https://api.abacatepay.com/v1/billing/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_KEY },
+        body: JSON.stringify({
+          frequency: 'ONE_TIME',
+          methods: ['PIX'],
+          products: [{ externalId: 'carta-para-sempre', name: 'Carta do Coração', quantity: 1, price: 1990 }],
+          customer: { id: cliente.data && cliente.data.id ? cliente.data.id : undefined },
+          returnUrl: window.location.origin + '/sucesso.html',
+          completionUrl: window.location.origin + '/sucesso.html',
+        })
+      });
+      var cob = await cobResp.json();
+      if (debug) { debug.textContent = 'Cobrança: ' + JSON.stringify(cob).substring(0,300); }
+
+      var pixCode = cob.data && (cob.data.pixQrCodeText || (cob.data.pix && cob.data.pix.qrCodeText));
+      if (pixCode) {
+        document.getElementById('pixQrCode').src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(pixCode);
+        document.getElementById('pixCopiaCola').textContent = pixCode;
         document.getElementById('pixResultBox').style.display = 'block';
         btn.style.display = 'none';
         if (debug) debug.style.display = 'none';
       } else {
+        if (debug) { debug.style.display='block'; debug.textContent = 'Sem pixCode. Resposta: ' + JSON.stringify(cob).substring(0,400); }
         btn.disabled = false;
         btn.textContent = '◉ Pagar com PIX';
       }
