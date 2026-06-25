@@ -2434,7 +2434,7 @@
     var email = document.getElementById('emailCartinha') ? document.getElementById('emailCartinha').value.trim() : '';
 
     try {
-      var resp = await fetch('/.netlify/functions/pix', {
+      var resp = await fetch('https://cartadocoracao1.netlify.app/.netlify/functions/pix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
